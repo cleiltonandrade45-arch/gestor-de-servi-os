@@ -25,6 +25,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
   const [currentProcess, setCurrentProcess] = useState<ProcessStep>(ProcessStep.ANALYSIS);
   const [result, setResult] = useState<string>('');
   const [comments, setComments] = useState<string>('');
+  const [images, setImages] = useState<string[]>([]); // New state for images
 
   useEffect(() => {
     if (serviceToEdit) {
@@ -37,6 +38,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
       setCurrentProcess(serviceToEdit.currentProcess);
       setResult(serviceToEdit.result || '');
       setComments(serviceToEdit.comments || '');
+      setImages(serviceToEdit.images || []); // Initialize images for editing
     } else {
       // Reset form for new service
       setTitle('');
@@ -48,8 +50,32 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
       setCurrentProcess(ProcessStep.ANALYSIS);
       setResult('');
       setComments('');
+      setImages([]); // Clear images for new service
     }
   }, [serviceToEdit]);
+
+  const handleImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newImages: string[] = [];
+      // Fix: Explicitly type 'file' as File to ensure correct property access and Blob assignment.
+      Array.from(files).forEach((file: File) => {
+        if (file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setImages((prevImages) => [...prevImages, reader.result as string]);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          addNotification(`O arquivo ${file.name} não é uma imagem válida e foi ignorado.`, 'warning');
+        }
+      });
+    }
+  }, [addNotification]);
+
+  const handleRemoveImage = useCallback((indexToRemove: number) => {
+    setImages((prevImages) => prevImages.filter((_, index) => index !== indexToRemove));
+  }, []);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +96,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
       currentProcess,
       result,
       comments,
+      images, // Include images in service data
     };
 
     if (serviceToEdit) {
@@ -101,6 +128,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
     currentProcess,
     result,
     comments,
+    images, // Add images to dependencies
     currentUser,
     serviceToEdit,
     addService,
@@ -237,6 +265,47 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
           onChange={(e) => setComments(e.target.value)}
         ></textarea>
       </div>
+
+      {/* New: Image Upload Section */}
+      <div className="border-t border-gray-200 pt-4">
+        <label htmlFor="service-images" className="block text-sm font-medium text-gray-700 mb-2">
+          Fotos do Serviço (Opcional)
+        </label>
+        <input
+          type="file"
+          id="service-images"
+          multiple
+          accept="image/*"
+          className="block w-full text-sm text-gray-500
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-md file:border-0
+            file:text-sm file:font-semibold
+            file:bg-blue-50 file:text-blue-700
+            hover:file:bg-blue-100"
+          onChange={handleImageChange}
+        />
+        {images.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {images.map((image, index) => (
+              <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200">
+                <img src={image} alt={`Service image ${index + 1}`} className="w-full h-32 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImage(index)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  aria-label="Remover imagem"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* End: Image Upload Section */}
+
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 sticky bottom-0 bg-white">
         <Button variant="secondary" type="button" onClick={onClose}>
           Cancelar

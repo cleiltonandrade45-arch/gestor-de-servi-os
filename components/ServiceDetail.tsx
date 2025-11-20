@@ -48,6 +48,7 @@ const ServiceDetail: React.FC<ServiceDetailProps> = ({ serviceId }) => {
         Comentários: ${service.comments || 'N/A'}
         Criado em: ${new Date(service.createdAt).toLocaleString()}
         Atualizado em: ${new Date(service.updatedAt).toLocaleString()}
+        ${service.images && service.images.length > 0 ? `\nImagens: ${service.images.length} anexadas` : ''}
       `;
 
       const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
@@ -215,6 +216,23 @@ const ServiceDetail: React.FC<ServiceDetailProps> = ({ serviceId }) => {
           )}
         </div>
       </div>
+
+      {service.images && service.images.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <p className="text-lg font-semibold text-gray-800 mb-2">Fotos Anexadas:</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {service.images.map((image, index) => (
+              <div key={index} className="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <img
+                  src={image}
+                  alt={`Foto do serviço ${service.title} - ${index + 1}`}
+                  className="w-full h-32 object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isEditing && (
         <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">

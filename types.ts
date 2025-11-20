@@ -1,4 +1,5 @@
 
+
 export enum ServiceStatus {
   PENDING = 'Pendente',
   IN_PROGRESS = 'Em andamento',
@@ -35,6 +36,7 @@ export interface Service {
   comments?: string;
   createdAt: string;
   updatedAt: string;
+  images?: string[]; // New: Optional array of base64 image strings
 }
 
 export interface NotificationState {
