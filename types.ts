@@ -17,15 +17,17 @@ export interface User {
   id: string;
   username: string;
   email: string; // Used for mock Google login
+  profilePictureUrl?: string; // New: URL for the user's profile picture
 }
 
+// New: Interface for Service
 export interface Service {
   id: string;
   userId: string;
   title: string;
   description: string;
-  startDate: string; // ISO date string
-  endDate?: string; // ISO date string
+  startDate: string;
+  endDate?: string;
   responsible: string;
   status: ServiceStatus;
   currentProcess: ProcessStep;

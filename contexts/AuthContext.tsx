@@ -1,7 +1,7 @@
 
 import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { User } from '../types';
-import { LOCAL_STORAGE_KEYS, MOCK_GOOGLE_USER } from '../constants';
+import { LOCAL_STORAGE_KEYS } from '../constants';
 import {
   loadAuthUser,
   saveAuthUser,
@@ -17,8 +17,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   register: (username: string, password: string, email: string) => Promise<boolean>;
-  googleLogin: () => Promise<void>;
   logout: () => void;
+  updateProfilePicture: (imageUrl: string) => void; // New: Function to update profile picture
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +26,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 interface AuthProviderProps {
   children: React.ReactNode;
 }
+
+// Helper to generate initials avatar URL
+const generateInitialsAvatar = (username: string) => {
+  const initials = username.split(' ').map(n => n[0]).join('').toUpperCase();
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&chars=2`;
+};
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -65,7 +71,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     setIsLoading(false);
     return false;
-  }, []); // mockUsersRef.current is not a direct dependency for useCallback as its content is mutable
+  }, []);
 
   const register = useCallback(async (username: string, password: string, email: string) => {
     setIsLoading(true);
@@ -81,6 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       id: `user_${Date.now()}`,
       username,
       email,
+      profilePictureUrl: generateInitialsAvatar(username), // New: Default avatar
     };
 
     mockUsersRef.current = {
@@ -92,26 +99,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return true;
   }, []);
 
-  const googleLogin = useCallback(async () => {
-    setIsLoading(true);
-    // Simulate Google OAuth flow
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setCurrentUser(MOCK_GOOGLE_USER);
-    setIsAuthenticated(true);
-    saveAuthUser(MOCK_GOOGLE_USER);
-
-    // Ensure mock_users contains google user for consistency, though not used for password login
-    if (!mockUsersRef.current[MOCK_GOOGLE_USER.username]) {
-      mockUsersRef.current = {
-        ...mockUsersRef.current,
-        [MOCK_GOOGLE_USER.username]: { password: '', email: MOCK_GOOGLE_USER.email, user: MOCK_GOOGLE_USER },
-      };
-      saveMockUsers(mockUsersRef.current);
-    }
-
-    setIsLoading(false);
-  }, []);
-
   const logout = useCallback(() => {
     setCurrentUser(null);
     setIsAuthenticated(false);
@@ -119,17 +106,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     addNotification('Você foi desconectado(a).', 'info');
   }, [addNotification]);
 
+  const updateProfilePicture = useCallback((imageUrl: string) => {
+    if (currentUser) {
+      const updatedUser = { ...currentUser, profilePictureUrl: imageUrl };
+      setCurrentUser(updatedUser);
+      saveAuthUser(updatedUser);
+
+      // Also update in mockUsersRef for persistence across sessions/logins
+      if (mockUsersRef.current[currentUser.username]) {
+        mockUsersRef.current = {
+          ...mockUsersRef.current,
+          [currentUser.username]: {
+            ...mockUsersRef.current[currentUser.username],
+            user: updatedUser,
+          },
+        };
+        saveMockUsers(mockUsersRef.current);
+      }
+      addNotification('Foto de perfil atualizada com sucesso!', 'success');
+    } else {
+      addNotification('Erro: Nenhum usuário logado para atualizar a foto de perfil.', 'error');
+    }
+  }, [currentUser, addNotification]);
+
   const value = React.useMemo(() => ({
     currentUser,
     isAuthenticated,
     isLoading,
     login,
     register,
-    googleLogin,
     logout,
-  }), [currentUser, isAuthenticated, isLoading, login, register, googleLogin, logout]);
+    updateProfilePicture,
+  }), [currentUser, isAuthenticated, isLoading, login, register, logout, updateProfilePicture]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Context.Provider>;
 };
 
 export const useAuth = () => {

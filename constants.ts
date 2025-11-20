@@ -15,12 +15,6 @@ export const PROCESS_STEP_COLORS: Record<ProcessStep, string> = {
   [ProcessStep.DELIVERED]: 'bg-teal-100 text-teal-800',
 };
 
-export const MOCK_GOOGLE_USER: User = {
-  id: 'google_user_123',
-  username: 'Usuário Google',
-  email: 'google@example.com',
-};
-
 export const LOCAL_STORAGE_KEYS = {
   AUTH_USER: 'auth_user',
   MOCK_USERS: 'mock_users',

@@ -5,20 +5,40 @@ import Button from './Button';
 
 interface HeaderProps {
   onAddService: () => void;
+  onOpenProfilePicModal: () => void; // New: Prop to open profile picture modal
 }
 
-const Header: React.FC<HeaderProps> = ({ onAddService }) => {
+// Helper to generate initials avatar URL (duplicated for component independence, but ideally shared)
+const generateInitialsAvatar = (username: string) => {
+  const initials = username.split(' ').map(n => n[0]).join('').toUpperCase();
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&chars=2`;
+};
+
+const Header: React.FC<HeaderProps> = ({ onAddService, onOpenProfilePicModal }) => {
   const { currentUser, logout } = useAuth();
+
+  const avatarSrc = currentUser?.profilePictureUrl || (currentUser?.username ? generateInitialsAvatar(currentUser.username) : 'https://picsum.photos/40/40');
+
 
   return (
     <header className="bg-white shadow-md py-4 px-4 sm:px-6 lg:px-8 sticky top-0 z-20">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div className="flex items-center gap-2">
-          <img
-            src="https://picsum.photos/40/40"
-            alt="User Avatar"
-            className="rounded-full w-10 h-10 object-cover"
-          />
+          <button
+            onClick={onOpenProfilePicModal}
+            className="rounded-full w-10 h-10 object-cover overflow-hidden flex items-center justify-center bg-gray-200 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            aria-label="Mudar foto de perfil"
+          >
+            {avatarSrc.startsWith('data:image') || avatarSrc.startsWith('http') ? (
+              <img
+                src={avatarSrc}
+                alt="Avatar do Usuário"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-gray-600 font-semibold text-sm">{currentUser?.username ? currentUser.username.substring(0, 2).toUpperCase() : '??'}</span>
+            )}
+          </button>
           <span className="text-lg font-medium text-gray-800 hidden sm:block">
             Bem-vindo(a), {currentUser?.username || 'Usuário'}!
           </span>
