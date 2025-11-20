@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { User } from '../types';
 import { LOCAL_STORAGE_KEYS } from '../constants';
@@ -139,7 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     updateProfilePicture,
   }), [currentUser, isAuthenticated, isLoading, login, register, logout, updateProfilePicture]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Context.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
