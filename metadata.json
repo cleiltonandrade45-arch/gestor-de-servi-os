@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Service Management App",
+  "description": "A simple and intuitive application for managing services, tracking their status, processes, and results. Features user authentication with Google login option and local data storage.",
+  "requestFramePermissions": []
+}
