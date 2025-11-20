@@ -1,4 +1,3 @@
-
 import { ServiceStatus, ProcessStep, User } from './types';
 
 export const SERVICE_STATUS_COLORS: Record<ServiceStatus, string> = {
@@ -16,7 +15,6 @@ export const PROCESS_STEP_COLORS: Record<ProcessStep, string> = {
 };
 
 export const LOCAL_STORAGE_KEYS = {
-  AUTH_USER: 'auth_user',
-  MOCK_USERS: 'mock_users',
-  SERVICES_PREFIX: 'user_services_', // Will be suffixed with userId
+  AUTH_USER: 'auth_user', // Still used for local persistence of Firebase auth user object
+  SERVICES_PREFIX: 'user_services_', // Still used as a fallback/prefix for local service data, although now Firestore is primary
 };

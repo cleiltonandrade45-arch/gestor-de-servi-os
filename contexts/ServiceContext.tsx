@@ -1,15 +1,26 @@
-
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { Service } from '../types';
 import { useAuth } from './AuthContext';
-import { loadServicesForUser, saveServicesForUser } from '../services/serviceDataService';
 import { useNotifications } from './NotificationContext';
+import { db } from '../firebaseConfig'; // Import Firestore
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  Timestamp,
+} from 'firebase/firestore';
 
 interface ServiceContextType {
   services: Service[];
-  addService: (service: Service) => void;
-  updateService: (updatedService: Service) => void;
-  deleteService: (serviceId: string) => void;
+  addService: (service: Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) => Promise<void>;
+  updateService: (updatedService: Service) => Promise<void>;
+  deleteService: (serviceId: string) => Promise<void>;
 }
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
@@ -23,38 +34,101 @@ export const ServiceProvider: React.FC<ServiceProviderProps> = ({ children }) =>
   const [services, setServices] = useState<Service[]>([]);
   const { addNotification } = useNotifications();
 
-  // Load services when user changes or authenticates
+  // Listen for real-time service updates from Firestore
   useEffect(() => {
     if (isAuthenticated && currentUser) {
-      const userServices = loadServicesForUser(currentUser.id);
-      setServices(userServices);
+      const servicesCollectionRef = collection(db, 'services');
+      const q = query(
+        servicesCollectionRef,
+        where('userId', '==', currentUser.uid),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const servicesData: Service[] = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            userId: data.userId,
+            title: data.title,
+            description: data.description,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            responsible: data.responsible,
+            status: data.status,
+            currentProcess: data.currentProcess,
+            result: data.result,
+            comments: data.comments,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+            updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+            images: data.images || [],
+          };
+        });
+        setServices(servicesData);
+      }, (error) => {
+        console.error("Error fetching services:", error);
+        addNotification('Erro ao carregar serviços.', 'error');
+      });
+
+      return () => unsubscribe(); // Cleanup listener on unmount or user change
     } else {
       setServices([]); // Clear services if no user or not authenticated
     }
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated, currentUser, addNotification]);
 
-  // Save services whenever they change
-  useEffect(() => {
-    if (isAuthenticated && currentUser) {
-      saveServicesForUser(currentUser.id, services);
+  const addService = useCallback(async (serviceData: Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) => {
+    if (!currentUser) {
+      addNotification('Usuário não autenticado.', 'error');
+      return;
     }
-  }, [services, isAuthenticated, currentUser]);
+    try {
+      await addDoc(collection(db, 'services'), {
+        ...serviceData,
+        userId: currentUser.uid,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      addNotification('Serviço adicionado com sucesso!', 'success');
+    } catch (error) {
+      console.error("Error adding service:", error);
+      addNotification('Erro ao adicionar serviço.', 'error');
+    }
+  }, [currentUser, addNotification]);
 
-  const addService = useCallback((service: Service) => {
-    setServices((prevServices) => [...prevServices, service]);
-  }, []);
+  const updateService = useCallback(async (updatedService: Service) => {
+    if (!currentUser || updatedService.userId !== currentUser.uid) {
+      addNotification('Você não tem permissão para editar este serviço.', 'error');
+      return;
+    }
+    try {
+      const serviceDocRef = doc(db, 'services', updatedService.id);
+      await updateDoc(serviceDocRef, {
+        ...updatedService,
+        updatedAt: Timestamp.now(),
+      });
+      addNotification('Serviço atualizado com sucesso!', 'success');
+    } catch (error) {
+      console.error("Error updating service:", error);
+      addNotification('Erro ao atualizar serviço.', 'error');
+    }
+  }, [currentUser, addNotification]);
 
-  const updateService = useCallback((updatedService: Service) => {
-    setServices((prevServices) =>
-      prevServices.map((service) =>
-        service.id === updatedService.id ? updatedService : service
-      )
-    );
-  }, []);
-
-  const deleteService = useCallback((serviceId: string) => {
-    setServices((prevServices) => prevServices.filter((service) => service.id !== serviceId));
-  }, []);
+  const deleteService = useCallback(async (serviceId: string) => {
+    // Optimistic UI update or check permissions before deleting
+    const serviceToDelete = services.find(s => s.id === serviceId);
+    if (!currentUser || serviceToDelete?.userId !== currentUser.uid) {
+      addNotification('Você não tem permissão para excluir este serviço.', 'error');
+      return;
+    }
+    try {
+      const serviceDocRef = doc(db, 'services', serviceId);
+      await deleteDoc(serviceDocRef);
+      addNotification('Serviço excluído com sucesso!', 'success');
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      addNotification('Erro ao excluir serviço.', 'error');
+    }
+  }, [currentUser, services, addNotification]);
 
   const value = React.useMemo(() => ({
     services,

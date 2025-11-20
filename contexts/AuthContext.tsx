@@ -1,23 +1,30 @@
-import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { User } from '../types';
 import { LOCAL_STORAGE_KEYS } from '../constants';
-import {
-  loadAuthUser,
-  saveAuthUser,
-  removeAuthUser,
-  loadMockUsers,
-  saveMockUsers,
-} from '../services/localStorageService';
+import { saveAuthUser, loadAuthUser, removeAuthUser } from '../services/localStorageService';
 import { useNotifications } from './NotificationContext';
+import { auth, db } from '../firebaseConfig'; // Import Firebase Auth and Firestore
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  updateProfile,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string, email: string) => Promise<boolean>;
-  logout: () => void;
-  updateProfilePicture: (imageUrl: string) => void; // New: Function to update profile picture
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<void>;
+  logout: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>; // New: Google Sign-in
+  updateProfilePicture: (imageUrl: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,7 +33,7 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
-// Helper to generate initials avatar URL
+// Helper to generate initials avatar URL (same as in Header for consistency)
 const generateInitialsAvatar = (username: string) => {
   const initials = username.split(' ').map(n => n[0]).join('').toUpperCase();
   return `https://api.dicebear.com/7.x/initials/svg?seed=${initials}&chars=2`;
@@ -38,95 +45,134 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { addNotification } = useNotifications();
 
-  // Using a ref to hold mockUsers to avoid re-creating it on every render in useCallback deps
-  const mockUsersRef = useRef<Record<string, { password: string; email: string; user: User }>>({});
+  // Fetches additional user data from Firestore
+  const fetchFirestoreUserData = useCallback(async (firebaseUser: FirebaseUser): Promise<User> => {
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      return {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: data.displayName || firebaseUser.displayName,
+        photoURL: data.photoURL || firebaseUser.photoURL,
+      };
+    } else {
+      // If no custom doc, create a basic one
+      const newUserDoc: User = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário',
+        photoURL: firebaseUser.photoURL || generateInitialsAvatar(firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário'),
+      };
+      await setDoc(userDocRef, newUserDoc);
+      return newUserDoc;
+    }
+  }, []);
 
   useEffect(() => {
-    const storedUsers = loadMockUsers();
-    if (storedUsers) {
-      mockUsersRef.current = storedUsers;
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in
+        try {
+          const userWithFirestoreData = await fetchFirestoreUserData(firebaseUser);
+          setCurrentUser(userWithFirestoreData);
+          setIsAuthenticated(true);
+          saveAuthUser(userWithFirestoreData); // Save to local storage
+        } catch (error) {
+          console.error("Error fetching Firestore user data:", error);
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          removeAuthUser();
+          addNotification('Erro ao carregar dados do usuário.', 'error');
+        }
+      } else {
+        // User is signed out
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        removeAuthUser(); // Remove from local storage
+      }
+      setIsLoading(false);
+    });
 
-    const user = loadAuthUser();
-    if (user) {
-      setCurrentUser(user);
+    // Attempt to load from local storage immediately to prevent flicker
+    const localUser = loadAuthUser();
+    if (localUser) {
+      setCurrentUser(localUser);
       setIsAuthenticated(true);
     }
+
+    return () => unsubscribe(); // Cleanup subscription
+  }, [fetchFirestoreUserData, addNotification]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setIsLoading(true);
+    await signInWithEmailAndPassword(auth, email, password);
+    // onAuthStateChanged will handle setting currentUser and isAuthenticated
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const register = useCallback(async (email: string, password: string, displayName: string) => {
     setIsLoading(true);
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const firebaseUser = userCredential.user;
 
-    const userEntry = mockUsersRef.current[username];
-    if (userEntry && userEntry.password === password) {
-      setCurrentUser(userEntry.user);
-      setIsAuthenticated(true);
-      saveAuthUser(userEntry.user);
-      setIsLoading(false);
-      return true;
-    }
-    setIsLoading(false);
-    return false;
-  }, []);
+    // Update display name and photo URL in Firebase Auth profile
+    const defaultPhotoURL = generateInitialsAvatar(displayName);
+    await updateProfile(firebaseUser, {
+      displayName: displayName,
+      photoURL: defaultPhotoURL,
+    });
 
-  const register = useCallback(async (username: string, password: string, email: string) => {
-    setIsLoading(true);
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    if (mockUsersRef.current[username]) {
-      setIsLoading(false);
-      return false; // User already exists
-    }
-
+    // Create a user document in Firestore
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
     const newUser: User = {
-      id: `user_${Date.now()}`,
-      username,
-      email,
-      profilePictureUrl: generateInitialsAvatar(username), // New: Default avatar
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: displayName,
+      photoURL: defaultPhotoURL,
     };
-
-    mockUsersRef.current = {
-      ...mockUsersRef.current,
-      [username]: { password, email, user: newUser },
-    };
-    saveMockUsers(mockUsersRef.current);
+    await setDoc(userDocRef, newUser);
+    // onAuthStateChanged will handle setting currentUser and isAuthenticated
     setIsLoading(false);
-    return true;
   }, []);
 
-  const logout = useCallback(() => {
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-    removeAuthUser();
+  const logout = useCallback(async () => {
+    setIsLoading(true);
+    await signOut(auth);
+    // onAuthStateChanged will handle clearing currentUser and isAuthenticated
     addNotification('Você foi desconectado(a).', 'info');
+    setIsLoading(false);
   }, [addNotification]);
 
-  const updateProfilePicture = useCallback((imageUrl: string) => {
-    if (currentUser) {
-      const updatedUser = { ...currentUser, profilePictureUrl: imageUrl };
-      setCurrentUser(updatedUser);
-      saveAuthUser(updatedUser);
+  const signInWithGoogle = useCallback(async () => {
+    setIsLoading(true);
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+    // onAuthStateChanged will handle setting currentUser and isAuthenticated
+    addNotification('Login com Google bem-sucedido!', 'success');
+    setIsLoading(false);
+  }, [addNotification]);
 
-      // Also update in mockUsersRef for persistence across sessions/logins
-      if (mockUsersRef.current[currentUser.username]) {
-        mockUsersRef.current = {
-          ...mockUsersRef.current,
-          [currentUser.username]: {
-            ...mockUsersRef.current[currentUser.username],
-            user: updatedUser,
-          },
-        };
-        saveMockUsers(mockUsersRef.current);
-      }
+  const updateProfilePicture = useCallback(async (imageUrl: string) => {
+    if (auth.currentUser) {
+      // Update Firebase Auth profile photoURL
+      await updateProfile(auth.currentUser, {
+        photoURL: imageUrl,
+      });
+
+      // Also update in Firestore user document
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      await setDoc(userDocRef, { photoURL: imageUrl }, { merge: true });
+
+      // Update local state
+      setCurrentUser((prevUser) => prevUser ? { ...prevUser, photoURL: imageUrl } : null);
       addNotification('Foto de perfil atualizada com sucesso!', 'success');
     } else {
       addNotification('Erro: Nenhum usuário logado para atualizar a foto de perfil.', 'error');
+      throw new Error('No user logged in to update profile picture.');
     }
-  }, [currentUser, addNotification]);
+  }, [addNotification]);
 
   const value = React.useMemo(() => ({
     currentUser,
@@ -135,8 +181,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     register,
     logout,
+    signInWithGoogle,
     updateProfilePicture,
-  }), [currentUser, isAuthenticated, isLoading, login, register, logout, updateProfilePicture]);
+  }), [currentUser, isAuthenticated, isLoading, login, register, logout, signInWithGoogle, updateProfilePicture]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

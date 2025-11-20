@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Button from './Button';
@@ -12,7 +11,8 @@ const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({ onClose
   const { currentUser, updateProfilePicture } = useAuth();
   const { addNotification } = useNotifications();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(currentUser?.profilePictureUrl || null);
+  // Use currentUser?.photoURL for preview, which is what Firebase Auth user object provides
+  const [previewUrl, setPreviewUrl] = useState<string | null>(currentUser?.photoURL || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,19 +26,26 @@ const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({ onClose
       reader.readAsDataURL(file);
     } else {
       setSelectedFile(null);
-      setPreviewUrl(currentUser?.profilePictureUrl || null);
+      // Reset preview to current user's photoURL if file is invalid
+      setPreviewUrl(currentUser?.photoURL || null);
       addNotification('Por favor, selecione um arquivo de imagem válido.', 'warning');
     }
   }, [currentUser, addNotification]);
 
-  const handleSave = useCallback(() => {
-    if (previewUrl) {
-      updateProfilePicture(previewUrl);
-      onClose();
+  const handleSave = useCallback(async () => {
+    if (previewUrl && currentUser) {
+      try {
+        await updateProfilePicture(previewUrl); // Call the auth context function
+        addNotification('Foto de perfil atualizada com sucesso!', 'success');
+        onClose();
+      } catch (error: any) {
+        addNotification(`Erro ao atualizar foto de perfil: ${error.message}`, 'error');
+        console.error('Error updating profile picture:', error);
+      }
     } else {
       addNotification('Por favor, selecione uma imagem para salvar.', 'warning');
     }
-  }, [previewUrl, updateProfilePicture, onClose, addNotification]);
+  }, [previewUrl, currentUser, updateProfilePicture, onClose, addNotification]);
 
   const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
@@ -76,7 +83,7 @@ const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({ onClose
         <Button variant="secondary" onClick={onClose}>
           Cancelar
         </Button>
-        <Button variant="primary" onClick={handleSave} disabled={!selectedFile && !currentUser?.profilePictureUrl}>
+        <Button variant="primary" onClick={handleSave} disabled={!selectedFile && !currentUser?.photoURL}>
           Salvar
         </Button>
       </div>

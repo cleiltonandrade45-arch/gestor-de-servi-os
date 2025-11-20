@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useServices } from '../contexts/ServiceContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -57,8 +56,6 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
   const handleImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newImages: string[] = [];
-      // Fix: Explicitly type 'file' as File to ensure correct property access and Blob assignment.
       Array.from(files).forEach((file: File) => {
         if (file.type.startsWith('image/')) {
           const reader = new FileReader();
@@ -77,7 +74,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
     setImages((prevImages) => prevImages.filter((_, index) => index !== indexToRemove));
   }, []);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!currentUser) {
@@ -85,39 +82,44 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ serviceToEdit, onClose }) => 
       return;
     }
 
-    const serviceData: Omit<Service, 'id' | 'createdAt' | 'updatedAt'> = {
-      userId: currentUser.id,
-      title,
-      description,
-      startDate: new Date(startDate).toISOString(),
-      endDate: endDate ? new Date(endDate).toISOString() : undefined,
-      responsible,
-      status,
-      currentProcess,
-      result,
-      comments,
-      images, // Include images in service data
-    };
-
-    if (serviceToEdit) {
-      const updatedService: Service = {
-        ...serviceToEdit,
-        ...serviceData,
-        updatedAt: new Date().toISOString(),
-      };
-      updateService(updatedService);
-      addNotification('Serviço atualizado com sucesso!', 'success');
-    } else {
-      const newService: Service = {
-        ...serviceData,
-        id: String(Date.now()), // Simple unique ID
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      addService(newService);
-      addNotification('Novo serviço adicionado com sucesso!', 'success');
+    try {
+      if (serviceToEdit) {
+        // For update, we send the full service object with its ID
+        const updatedService: Service = {
+          ...serviceToEdit,
+          title,
+          description,
+          startDate: new Date(startDate).toISOString(),
+          endDate: endDate ? new Date(endDate).toISOString() : undefined,
+          responsible,
+          status,
+          currentProcess,
+          result,
+          comments,
+          images, // Include images in service data
+        };
+        await updateService(updatedService);
+      } else {
+        // For add, we omit id, createdAt, updatedAt, userId as they are handled by context/Firestore
+        const newServiceData = {
+          title,
+          description,
+          startDate: new Date(startDate).toISOString(),
+          endDate: endDate ? new Date(endDate).toISOString() : undefined,
+          responsible,
+          status,
+          currentProcess,
+          result,
+          comments,
+          images, // Include images in service data
+        };
+        await addService(newServiceData);
+      }
+      onClose();
+    } catch (error: any) {
+      addNotification(`Erro ao salvar serviço: ${error.message}`, 'error');
+      console.error('Error saving service:', error);
     }
-    onClose();
   }, [
     title,
     description,

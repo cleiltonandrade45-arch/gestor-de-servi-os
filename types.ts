@@ -15,16 +15,16 @@ export enum ProcessStep {
 }
 
 export interface User {
-  id: string;
-  username: string;
-  email: string; // Used for mock Google login
-  profilePictureUrl?: string; // New: URL for the user's profile picture
+  uid: string; // Firebase User ID
+  email: string | null;
+  displayName?: string | null; // Corresponds to username
+  photoURL?: string | null; // Profile picture URL
 }
 
 // New: Interface for Service
 export interface Service {
-  id: string;
-  userId: string;
+  id: string; // Document ID from Firestore
+  userId: string; // Firebase User ID
   title: string;
   description: string;
   startDate: string;
@@ -36,7 +36,7 @@ export interface Service {
   comments?: string;
   createdAt: string;
   updatedAt: string;
-  images?: string[]; // New: Optional array of base64 image strings
+  images?: string[]; // Optional array of base64 image strings
 }
 
 export interface NotificationState {

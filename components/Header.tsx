@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Button from './Button';
@@ -17,7 +16,8 @@ const generateInitialsAvatar = (username: string) => {
 const Header: React.FC<HeaderProps> = ({ onAddService, onOpenProfilePicModal }) => {
   const { currentUser, logout } = useAuth();
 
-  const avatarSrc = currentUser?.profilePictureUrl || (currentUser?.username ? generateInitialsAvatar(currentUser.username) : 'https://picsum.photos/40/40');
+  // Use currentUser.photoURL from Firebase, fallback to initials or a generic pic
+  const avatarSrc = currentUser?.photoURL || (currentUser?.displayName ? generateInitialsAvatar(currentUser.displayName) : 'https://picsum.photos/40/40');
 
 
   return (
@@ -36,11 +36,11 @@ const Header: React.FC<HeaderProps> = ({ onAddService, onOpenProfilePicModal }) 
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className="text-gray-600 font-semibold text-sm">{currentUser?.username ? currentUser.username.substring(0, 2).toUpperCase() : '??'}</span>
+              <span className="text-gray-600 font-semibold text-sm">{currentUser?.displayName ? currentUser.displayName.substring(0, 2).toUpperCase() : '??'}</span>
             )}
           </button>
           <span className="text-lg font-medium text-gray-800 hidden sm:block">
-            Bem-vindo(a), {currentUser?.username || 'Usuário'}!
+            Bem-vindo(a), {currentUser?.displayName || 'Usuário'}!
           </span>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Service Management App",
-  "description": "A simple and intuitive application for managing services, tracking their status, processes, and results. Features user authentication with Google login option and local data storage.",
+  "name": "Service Management App",
+  "description": "Um aplicativo de gestão de serviços robusto com autenticação de usuário via Firebase Authentication (incluindo Google Login) e armazenamento de dados persistente no Firebase Firestore.",
   "requestFramePermissions": []
 }
